@@ -6,33 +6,27 @@ package my.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Font;
+import java.awt.Toolkit;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.awt.event.KeyEvent;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JCheckBoxMenuItem;
-import javax.swing.JFileChooser;
-import javax.swing.JFrame;
-import javax.swing.JMenu;
-import javax.swing.JMenuBar;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
-import javax.swing.JScrollPane;
-import javax.swing.JSeparator;
-import javax.swing.JTextArea;
-import javax.swing.JToolBar;
-import javax.swing.KeyStroke;
+import java.io.FileWriter;
+import java.io.IOException;
+import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
-/**
- *
- * @author ADMIN
- */
 public class JNotepad extends JFrame {
 
+    // Khai báo các thành phần GUI
     private JMenuBar menuBar;
     private JMenu mFile, mEdit, mFormat, mView, mHelp, mZoom;
     private JMenuItem itemNew, itemOpen, itemSave, itemSaveAs, itemPageSetup, itemPrint, itemExit;
@@ -46,6 +40,8 @@ public class JNotepad extends JFrame {
     private JTextArea txtEditor;
     private JToolBar toolBar;
     private JButton btNew, btOpen, btSave;
+
+    private File currentFile; // Lưu trữ tệp hiện tại đang được chỉnh sửa
 
     public JNotepad(String title) {
         super(title);
@@ -135,6 +131,14 @@ public class JNotepad extends JFrame {
         itemZoomIn.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_PLUS, KeyEvent.CTRL_DOWN_MASK));
         itemZoomOut.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, KeyEvent.CTRL_DOWN_MASK));
         itemZoomRestore.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_0, KeyEvent.CTRL_DOWN_MASK));
+        
+          // Thêm các action listener cho các mục menu
+        itemOpen.addActionListener(e -> openFile());
+        itemSave.addActionListener(e -> saveFile());
+        itemSaveAs.addActionListener(e -> saveFileAs());
+        itemExit.addActionListener(e -> exitApplication());
+        itemCopy.addActionListener(e -> copyText());
+        itemPaste.addActionListener(e -> pasteText());
     }
 
     private void createGui() {
@@ -177,7 +181,7 @@ public class JNotepad extends JFrame {
     }
 
     private void openFile()  {
-        JFileChooser dlgFile = new JFileChooser();
+       JFileChooser dlgFile = new JFileChooser();
         if (dlgFile.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             try{
                 //tao luong va lien ket voi tan tin
@@ -220,5 +224,100 @@ public class JNotepad extends JFrame {
         btSave.setIcon(new ImageIcon(this.getClass().getResource("/img/save.png")));
 
         add(toolBar, BorderLayout.NORTH);
+        
+            // Thêm action listener cho các nút trên thanh công cụ
+        btNew.addActionListener(e -> newFile());
+        btOpen.addActionListener(e -> openFile());
+        btSave.addActionListener(e -> saveFile());
     }
+
+    private void saveFileAs() {
+         JFileChooser fileChooser = new JFileChooser();
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("Tệp văn bản", "txt");
+        fileChooser.setFileFilter(filter);
+
+        int result = fileChooser.showSaveDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            if (!selectedFile.getName().toLowerCase().endsWith(".txt")) {
+                selectedFile = new File(selectedFile.getParentFile(), selectedFile.getName() + ".txt");
+            }
+            try (FileOutputStream fos = new FileOutputStream(selectedFile)) {
+                byte[] content = txtEditor.getText().getBytes();
+                fos.write(content);
+                currentFile = selectedFile;
+                setTitle(currentFile.getName() + " - JNotepad");
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "Lỗi khi lưu tệp: " + ex.getMessage(),
+                        "Lỗi lưu tệp", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private void exitApplication() {
+          if (hasUnsavedChanges()) {
+            int choice = JOptionPane.showConfirmDialog(this,
+                    "Bạn có muốn lưu thay đổi trước khi thoát không?",
+                    "Thay đổi chưa được lưu", JOptionPane.YES_NO_CANCEL_OPTION);
+            if (choice == JOptionPane.YES_OPTION) {
+                saveFile();
+            } else if (choice == JOptionPane.CANCEL_OPTION) {
+                return;
+            }
+        }
+        System.exit(0);
+    }
+
+    private void copyText() {
+           String selectedText = txtEditor.getSelectedText();
+        if (selectedText != null && !selectedText.isEmpty()) {
+            StringSelection stringSelection = new StringSelection(selectedText);
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(stringSelection, null);
+        }
+    }
+
+    private void pasteText() {
+         Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        try {
+            if (clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {
+                String text = (String) clipboard.getData(DataFlavor.stringFlavor);
+                txtEditor.replaceSelection(text);
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Lỗi khi dán văn bản: " + ex.getMessage(),
+                    "Lỗi dán", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void newFile() {
+          if (hasUnsavedChanges()) {
+            int choice = JOptionPane.showConfirmDialog(this,
+                    "Bạn có muốn lưu thay đổi cho tệp hiện tại không?",
+                    "Thay đổi chưa được lưu", JOptionPane.YES_NO_CANCEL_OPTION);
+            if (choice == JOptionPane.YES_OPTION) {
+                saveFile();
+            } else if (choice == JOptionPane.CANCEL_OPTION) {
+                return;
+            }
+        }
+        txtEditor.setText("");
+        currentFile = null;
+        setTitle("Untitled - JNotepad");
+    }
+
+    private boolean hasUnsavedChanges() {
+         if (currentFile == null) {
+            return !txtEditor.getText().isEmpty();
+        }
+        try (FileInputStream fis = new FileInputStream(currentFile)) {
+            byte[] fileContent = new byte[(int) currentFile.length()];
+            fis.read(fileContent);
+            String fileText = new String(fileContent);
+            return !fileText.equals(txtEditor.getText());
+        } catch (IOException ex) {
+            return true; // Giả định có thay đổi chưa được lưu nếu không thể đọc tệp
+        }
+    }
+    
 }
