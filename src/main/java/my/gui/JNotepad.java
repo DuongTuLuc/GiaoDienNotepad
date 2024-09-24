@@ -319,5 +319,9 @@ public class JNotepad extends JFrame {
             return true; // Giả định có thay đổi chưa được lưu nếu không thể đọc tệp
         }
     }
+
+    Object getEditor() {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
     
 }
